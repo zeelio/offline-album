@@ -5,9 +5,10 @@ import { STAMPS, stampById, stampSVG, newlyEarned } from './stamps.js';
 import { sceneBlob } from './art.js';
 import { exportPostcard } from './postcard.js';
 import { openImport } from './import-flow.js';
+import { monthYear } from './importer.js';
 import { boardFrames, countdownLabel, daysUntil, estimateBoarding, lookupFlight } from './journey.js';
 
-const BUILD = 7;
+const BUILD = 8;
 const LENGTHS = [8, 10];
 const ITEM_SCALE_PORTRAIT = .72;
 const HALOS = ['#f3e2a9', '#e2d3f3', '#cfe0f4', '#f3d0d4', '#d6e4c4'];
@@ -123,70 +124,147 @@ async function route() {
 }
 
 // ---------- home ----------
+const tripName = t => t.title.map(clean).join(' ').replace(/\s+/g, ' ').trim() || 'Untitled';
+const photoCount = t => t.items.filter(it => it.type === 'photo').length;
+const coverId = t => t.items.find(it => it.type === 'photo')?.photoId;
+const shortDate = d => new Date(`${d}T12:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+
 async function renderHome() {
   view = null;
   stageScale = Math.min(1, innerWidth / 900);
   document.body.dataset.view = 'home';
   const trips = (await db.all('trips')).sort((a, b) => b.updated - a.updated);
-  app.innerHTML = `
-    <main class="home">
-      <header class="home-top">
-        <span class="mono tag">Offline Album · ${pad2(trips.length)} trips</span>
-        <button class="glass round" data-act="theme" aria-label="Switch light or dark">${ICON.theme}</button>
-      </header>
-      <div class="board home-board" id="homeBoard" role="img" aria-label="Offline album"></div>
-      <p class="lede">Scrapbooks for the trips<br>you were offline for.</p>
-      <div class="home-actions">
-        <button class="glass pill" data-act="new">${ICON.plus}<span>New trip</span></button>
-        <button class="glass pill" data-act="import">${ICON.photo}<span>Find my holidays</span></button>
-      </div>
-      <section class="clusters">${(await Promise.all(trips.map(clusterHTML))).join('')}</section>
-      <footer class="mono foot"><span>EST. ${new Date().getFullYear()} · BUILD ${BUILD}</span><span>DRAG · DROP · FLIP</span></footer>
-    </main>`;
-  const board = createBoard(document.getElementById('homeBoard'), LENGTHS);
-  board.set(['', '']);
-  // between the album name, show what's coming up next
   const upcoming = trips
     .filter(t => t.journey?.date && daysUntil(t.journey.date) >= 0 && t.journey.countdown !== false)
     .sort((a, b) => a.journey.date.localeCompare(b.journey.date));
-  let n = 0;
-  driveBoard(board, () => {
-    const frames = [['OFFLINE', 'ALBUM'], ...upcoming.flatMap(t => boardFrames(t).slice(0, 2))];
-    return frames.length > 1 ? [frames[n++ % frames.length]] : frames;
-  });
+  const next = upcoming[0];
+  const hero = next || trips[0];
+  const feature = trips.find(t => t !== hero);
+  const cover = async t => (t && coverId(t)) ? photoUrl(coverId(t)) : '';
+  const [heroSrc, featureSrc] = await Promise.all([cover(hero), cover(feature)]);
+  const totalPhotos = trips.reduce((n, t) => n + photoCount(t), 0);
+  const stamps = new Set(trips.flatMap(t => t.earned)).size;
+  const number = t => pad2(trips.length - trips.indexOf(t));
+
+  const heroLabel = next ? 'Next trip' : hero ? 'Latest trip' : 'Welcome';
+  const heroFoot = next
+    ? `<span class="mono">${esc(countdownLabel(next))} · ${esc(shortDate(next.journey.date))}${next.journey.flight?.number ? ` · ${esc(next.journey.flight.number)}` : ''}</span>`
+    : hero ? `<span class="mono">${photoCount(hero)} photos · ${hero.earned.length} stamps</span>`
+      : `<span class="mono">Scrapbooks for the trips you were offline for</span>`;
+  const heroAction = hero
+    ? `<a class="chip-btn" href="#/trip/${encodeURIComponent(hero.id)}">Open</a>`
+    : `<button class="chip-btn" data-act="plan">Plan a trip</button>`;
+
+  app.innerHTML = `
+    <main class="home2">
+      <header class="bar-top">
+        <span class="wordmark">Offline Album<i></i></span>
+        <span class="bar-icons">
+          <button class="icon-btn" data-act="theme" aria-label="Switch light or dark">${ICON.theme}</button>
+          <button class="icon-btn" data-act="new" aria-label="New trip">${ICON.plus}</button>
+        </span>
+      </header>
+
+      <section class="hero ${heroSrc ? 'has-photo' : ''}">
+        ${heroSrc ? `<img class="hero-bg" src="${heroSrc}" alt="">` : '<div class="hero-sky"></div>'}
+        <div class="hero-top mono"><span>${heroLabel}</span><span>${hero ? `T-${number(hero)}` : 'A-01'}</span></div>
+        <div class="board hero-board" id="homeBoard" role="img" aria-label="${esc(hero ? tripName(hero) : 'Offline album')}"></div>
+        <div class="hero-foot">${heroFoot}${heroAction}</div>
+      </section>
+
+      <section class="tiles">
+        <button class="tile" data-act="trips"><span>Trips</span><b>${trips.length}</b></button>
+        <button class="tile" data-act="allstamps"><span>Stamps</span><b>${stamps}/${STAMPS.length}</b></button>
+        <button class="tile" data-act="import"><span>From library</span><b>${ICON.plus}</b></button>
+      </section>
+
+      ${next ? '' : `<button class="plan-row" data-act="plan"><span>Plan your next trip</span><span class="mono">Countdown · flight board</span></button>`}
+
+      ${feature ? `
+      <a class="feature" href="#/trip/${encodeURIComponent(feature.id)}">
+        ${featureSrc ? `<img src="${featureSrc}" alt="">` : '<div class="hero-sky"></div>'}
+        <span class="mono f-top">T-${number(feature)}</span>
+        <strong>${esc(tripName(feature))}</strong>
+        <span class="chip-btn">Open</span>
+      </a>` : ''}
+
+      ${trips.length ? `
+      <section class="index">
+        <div class="index-head mono"><span>Index</span><span>${pad2(trips.length)}</span></div>
+        ${trips.map(t => `
+          <a class="index-row" href="#/trip/${encodeURIComponent(t.id)}">
+            <span class="mono">${number(t)}</span>
+            <strong>${esc(tripName(t))}</strong>
+            <span class="mono">${esc(countdownLabel(t) || `${photoCount(t)} photos`)}</span>
+          </a>`).join('')}
+      </section>` : ''}
+
+      <footer class="mono foot2"><span>Offline Album</span><span>Build ${BUILD}</span></footer>
+    </main>
+    <nav class="tabs">
+      <button data-act="trips">Trips</button>
+      <button class="on" aria-current="page">Home</button>
+      <button data-act="import">Find</button>
+    </nav>`;
+
+  const board = createBoard(document.getElementById('homeBoard'), LENGTHS);
+  board.set(['', '']);
+  driveBoard(board, () => next ? boardFrames(next) : hero ? [hero.title] : [['OFFLINE', 'ALBUM']]);
   document.getElementById('homeBoard').addEventListener('pointerenter', () => board.shuffle());
 }
 
-async function clusterHTML(trip, i) {
-  const photoIds = trip.items.filter(it => it.type === 'photo').slice(-3).map(it => it.photoId);
-  const srcs = await Promise.all(photoIds.map(photoUrl));
-  const n = Math.max(1, srcs.length);
-  const pos = ['p0', 'p1', 'p2'].slice(0, n);
-  const bubbles = srcs.length
-    ? srcs.map((s, j) => `<span class="bubble ${pos[j]}"><img src="${s}" alt="" loading="lazy"></span>`).join('')
-    : `<span class="bubble empty p0">${ICON.photo}</span>`;
-  const photos = trip.items.filter(it => it.type === 'photo').length;
-  return `
-    <a class="cluster" href="#/trip/${encodeURIComponent(trip.id)}" style="--halo:${trip.halo}">
-      <div class="blob b${n}">${pos.map(p => `<span class="halo ${p}"></span>`).join('')}${bubbles}</div>
-      <div class="meta">
-        <span class="mono num">${pad2(i + 1)}</span>
-        <strong>${esc(trip.title.map(clean).join(' ').trim() || 'Untitled')}</strong>
-        <span class="mono sub">${photos} photo${photos === 1 ? '' : 's'} · ${trip.earned.length} stamp${trip.earned.length === 1 ? '' : 's'}</span>
-        ${countdownLabel(trip) ? `<span class="mono soon">${esc(countdownLabel(trip))}</span>` : ''}
-      </div>
-      <button class="glass round del" data-del="${esc(trip.id)}" aria-label="Delete trip">${ICON.trash}</button>
-    </a>`;
+// Bottom sheet listing every trip as a little stack of its photos.
+async function openTrips(editing = false) {
+  const trips = (await db.all('trips')).sort((a, b) => b.updated - a.updated);
+  const cards = await Promise.all(trips.map(async t => {
+    const ids = t.items.filter(it => it.type === 'photo').slice(0, 3).map(it => it.photoId);
+    const srcs = await Promise.all(ids.map(photoUrl));
+    const layers = srcs.length ? srcs.map((s, i) => `<img class="l${i}" src="${s}" alt="">`).reverse().join('') : '<span class="l0 empty"></span>';
+    return `
+      <div class="stack-card">
+        <a href="#/trip/${encodeURIComponent(t.id)}" class="stack">${layers}</a>
+        <span>${esc(tripName(t))}</span>
+        ${editing ? `<button class="x" data-del="${esc(t.id)}" aria-label="Delete ${esc(tripName(t))}">${ICON.trash}</button>` : ''}
+      </div>`;
+  }));
+  const dlg = sheetDialog(`
+    <div class="sheet-head"><h2>Trips <b>${trips.length}</b></h2><button class="text-btn" data-edit>${editing ? 'Done' : 'Edit'}</button></div>
+    <div class="stack-grid">${cards.join('')}<div class="stack-card"><button class="add-round" data-act="new" aria-label="New trip">${ICON.plus}</button></div></div>`);
+  dlg.querySelector('[data-edit]').onclick = () => { dlg.close(); openTrips(!editing); };
+  dlg.addEventListener('click', e => { if (e.target.closest('a, [data-act="new"]')) dlg.close(); });
 }
 
-async function newTrip() {
+// Every stamp across all trips.
+async function openAllStamps() {
+  const trips = await db.all('trips');
+  const earned = new Set(trips.flatMap(t => t.earned));
+  sheetDialog(`
+    <div class="sheet-head"><h2>Stamps <b>${earned.size}/${STAMPS.length}</b></h2></div>
+    <div class="stamp-grid">${STAMPS.map(s => `<div class="stamp-cell">${stampSVG(s, { locked: !earned.has(s.id) })}<span>${earned.has(s.id) ? s.label : s.hint}</span></div>`).join('')}</div>`);
+}
+
+function sheetDialog(html) {
+  document.querySelector('dialog.bottom')?.remove();
+  const dlg = document.createElement('dialog');
+  dlg.className = 'bottom';
+  dlg.innerHTML = `<div class="grabber"></div>${html}`;
+  document.body.appendChild(dlg);
+  dlg.addEventListener('close', () => dlg.remove());
+  // tap the dimmed area above the sheet to close it
+  dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
+  dlg.showModal();
+  return dlg;
+}
+
+async function newTrip(plan = false) {
+  document.querySelector('dialog.bottom')?.close();
   const trips = await db.all('trips');
   const trip = {
     id: uid(), title: ['NEW', 'TRIP'], created: Date.now(), updated: Date.now(),
     items: [], earned: [], halo: HALOS[trips.length % HALOS.length],
   };
   await db.put('trips', trip);
-  location.hash = `#/trip/${trip.id}?new`;
+  location.hash = `#/trip/${trip.id}?${plan ? 'plan' : 'new'}`;
 }
 
 async function deleteTrip(id) {
@@ -194,6 +272,7 @@ async function deleteTrip(id) {
   if (!trip || !confirm(`Delete "${trip.title.join(' ').trim()}" and its photos? This can't be undone.`)) return;
   await Promise.all(trip.items.filter(it => it.type === 'photo').map(it => db.del('photos', it.photoId)));
   await db.del('trips', id);
+  document.querySelector('dialog.bottom')?.close();
   renderHome();
 }
 
@@ -205,7 +284,8 @@ function stageSize() {
 async function renderTrip(trip) {
   document.body.dataset.view = 'trip';
   const isNew = location.hash.endsWith('?new');
-  if (isNew) history.replaceState(null, '', `#/trip/${trip.id}`);
+  const isPlan = location.hash.endsWith('?plan');
+  if (isNew || isPlan) history.replaceState(null, '', `#/trip/${trip.id}`);
 
   app.innerHTML = `
     <div class="trip">
@@ -242,6 +322,7 @@ async function renderTrip(trip) {
   bindTrip();
   watchFlight();
   if (isNew) setTimeout(openTitle, 450);
+  if (isPlan) setTimeout(openJourney, 450);
 }
 
 function cloudsSVG() {
@@ -598,9 +679,12 @@ journeyDlg.addEventListener('close', () => {
     countdown: jField('countdown').checked,
     flight: flight.number ? flight : null,
   };
+  const { place, date } = view.trip.journey;
+  if (view.trip.title.join('|') === 'NEW|TRIP' && place && date) view.trip.title = [monthYear(new Date(`${date}T12:00`).getTime()), place];
   save();
   view.boardDriver.reset();
   watchFlight();
+  checkStamps();
 });
 
 async function lookupFromDialog() {
@@ -786,6 +870,9 @@ document.addEventListener('click', e => {
   if (!act) return;
   if (act === 'theme') toggleTheme();
   else if (act === 'new') newTrip();
+  else if (act === 'plan') newTrip(true);
+  else if (act === 'trips') openTrips();
+  else if (act === 'allstamps') openAllStamps();
   else if (act === 'import') openImport({ processImage, freeSpot, toast, renderHome, halos: HALOS, local, esc });
   else if (act === 'add') toggleAddMenu();
   else if (act === 'photo') { toggleAddMenu(false); filePick.value = ''; filePick.click(); }

@@ -1,7 +1,7 @@
 // Network first so edits show up right away; falls back to cache when offline.
-const CACHE = 'offline-album-v8';
+const CACHE = 'offline-album-v9';
 const SHELL = ['./', 'index.html', 'styles.css', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png',
-  'js/app.js', 'js/db.js', 'js/flipboard.js', 'js/trail.js', 'js/art.js', 'js/stamps.js', 'js/postcard.js', 'js/journey.js', 'js/importer.js', 'js/import-flow.js'];
+  'js/app.js', 'js/db.js', 'js/flipboard.js', 'js/trail.js', 'js/art.js', 'js/stamps.js', 'js/postcard.js', 'js/journey.js', 'js/importer.js', 'js/import-flow.js', 'js/story.js'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));

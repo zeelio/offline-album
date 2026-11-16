@@ -4,11 +4,12 @@ import { createTrail } from './trail.js';
 import { STAMPS, stampById, stampSVG, newlyEarned } from './stamps.js';
 import { sceneBlob } from './art.js';
 import { exportPostcard } from './postcard.js';
+import { makeStory, toJpeg, STYLES } from './story.js';
 import { openImport } from './import-flow.js';
 import { monthYear } from './importer.js';
 import { boardFrames, countdownLabel, daysUntil, estimateBoarding, lookupFlight } from './journey.js';
 
-const BUILD = 8;
+const BUILD = 9;
 const LENGTHS = [8, 10];
 const ITEM_SCALE_PORTRAIT = .72;
 const HALOS = ['#f3e2a9', '#e2d3f3', '#cfe0f4', '#f3d0d4', '#d6e4c4'];
@@ -40,6 +41,7 @@ const ICON = {
   tag: I('M3 12V4h8l10 10-8 8zM7.5 7.5a.5.5 0 1 0 .01 0'),
   trash: I('M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13'),
   edit: I('M4 20l4-1 11-11-3-3L5 16z'),
+  story: I('M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM9 7h6M9 17h6M9 10h6v4H9z'),
   plane: I('M3 14l7-2 4-8h2l-1 7 5-1 2-2h1l-1 4 1 4h-1l-2-2-5-1 1 7h-2l-4-8-7-2z'),
 };
 
@@ -304,7 +306,7 @@ async function renderTrip(trip) {
       <nav class="dock glass">
         <button data-act="journey">${ICON.plane}<span>Journey</span></button>
         <button data-act="stamps">${ICON.stamp}<span>Stamps</span><b id="stampCount">0</b></button>
-        <button data-act="theme">${ICON.theme}<span>Theme</span></button>
+        <button data-act="story">${ICON.story}<span>Story</span></button>
         <button data-act="share">${ICON.share}<span>Postcard</span></button>
       </nav>
     </div>`;
@@ -738,6 +740,69 @@ function watchFlight() {
   flightTimer = setInterval(refresh, 5 * 6e4);
 }
 
+// ---------- story dump ----------
+async function openStory() {
+  select(null);
+  const trip = view.trip;
+  if (!trip.items.some(i => i.type === 'photo')) return toast('Add some photos first');
+  let style = STYLES[local.get('story-style')] ? local.get('story-style') : 'paper';
+  let seed = Date.now() % 1e6;
+  let blobs = [], urls = [], busy = false;
+  const dlg = sheetDialog(`
+    <div class="sheet-head"><h2>Story dump <b id="storyCount">··</b></h2></div>
+    <div class="seg">${Object.entries(STYLES).map(([k, s]) => `<button data-style="${k}" class="${k === style ? 'on' : ''}">${s.name}</button>`).join('')}</div>
+    <div class="story-strip" id="storyStrip"></div>
+    <p class="story-tip">Frames are 1080 × 1920, ready for Instagram Stories. On iPhone, tap Share, then choose Instagram or Save Images.</p>
+    <div class="story-actions"><button class="pill ghost" data-story="shuffle">Shuffle</button><button class="pill solid" data-story="share">Share all</button></div>`);
+  const strip = dlg.querySelector('#storyStrip');
+
+  const render = async () => {
+    busy = true;
+    strip.innerHTML = '<div class="story-loading mono">Developing…</div>';
+    const frames = await makeStory(trip, { photoUrl, style, seed });
+    urls.forEach(URL.revokeObjectURL);
+    blobs = await Promise.all(frames.map(toJpeg));
+    urls = blobs.map(b => URL.createObjectURL(b));
+    strip.innerHTML = urls.map((u, i) => `<img src="${u}" alt="Story frame ${i + 1}">`).join('');
+    strip.scrollLeft = 0;
+    dlg.querySelector('#storyCount').textContent = blobs.length;
+    busy = false;
+  };
+
+  dlg.addEventListener('click', async e => {
+    if (busy) return;
+    const s = e.target.closest('[data-style]');
+    if (s) {
+      style = s.dataset.style;
+      local.set('story-style', style);
+      dlg.querySelectorAll('[data-style]').forEach(b => b.classList.toggle('on', b === s));
+      return render();
+    }
+    const a = e.target.closest('[data-story]')?.dataset.story;
+    if (a === 'shuffle') { seed++; render(); }
+    if (a === 'share') shareStory(trip, blobs);
+  });
+  dlg.addEventListener('close', () => urls.forEach(URL.revokeObjectURL));
+  render();
+}
+
+async function shareStory(trip, blobs) {
+  const slug = trip.title.join('-').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'trip';
+  const files = blobs.map((b, i) => new File([b], `${slug}-story-${String(i + 1).padStart(2, '0')}.jpg`, { type: 'image/jpeg' }));
+  if (navigator.canShare?.({ files })) {
+    try { await navigator.share({ files }); return; } catch (e) { if (e.name === 'AbortError') return; }
+  }
+  for (const f of files) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(f);
+    a.download = f.name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    await new Promise(r => setTimeout(r, 250));
+  }
+  toast(`${files.length} story frames saved`);
+}
+
 // ---------- postcard ----------
 async function sharePostcard() {
   select(null);
@@ -882,6 +947,7 @@ document.addEventListener('click', e => {
   else if (act === 'lookup') lookupFromDialog();
   else if (act === 'stamps') openStamps();
   else if (act === 'share') sharePostcard();
+  else if (act === 'story') openStory();
 });
 filePick.addEventListener('change', () => addPhotos(filePick.files));
 

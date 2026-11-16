@@ -505,3 +505,19 @@ dialog.bottom .stamp-grid { grid-template-columns: repeat(3, 1fr); }
 }
 dialog:focus { outline: none; }
 .text-btn:focus:not(:focus-visible), .tile:focus:not(:focus-visible) { outline: none; }
+
+/* story dump */
+.seg { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--surface-2); width: max-content; margin: 0 auto 16px; }
+.seg button { padding: 8px 16px; border-radius: 999px; font: 400 13px 'Inter'; color: var(--muted); }
+.seg button.on { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.story-strip {
+  display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 4px 2px 12px;
+  margin: 0 -18px; padding-left: 18px; padding-right: 18px; min-height: 48dvh; scrollbar-width: none;
+}
+.story-strip::-webkit-scrollbar { display: none; }
+.story-strip img { height: min(48dvh, 520px); aspect-ratio: 9 / 16; border-radius: 12px; scroll-snap-align: center; flex: none; box-shadow: 0 6px 20px rgba(0,0,0,.12); background: var(--surface-2); }
+.story-loading { margin: auto; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.story-tip { font-size: 12px; line-height: 1.5; color: var(--muted); text-align: center; margin: 6px 12px 16px; }
+.story-actions { display: grid; grid-template-columns: 1fr 1.4fr; gap: 8px; }
+.story-actions .pill { justify-content: center; }
+.story-actions .pill.ghost { border-color: var(--line); }

@@ -453,7 +453,8 @@ function addNote() {
 }
 
 async function addPhotos(files) {
-  const images = [...files].filter(f => f.type.startsWith('image/'));
+  // iOS can leave the type blank for HEIC, so go by name too
+  const images = [...files].filter(f => f.type.startsWith('image/') || (!f.type.startsWith('video/') && /\.(heic|heif|jpe?g|png|webp|avif)$/i.test(f.name)));
   if (!images.length) return;
   for (const file of images) {
     let img;

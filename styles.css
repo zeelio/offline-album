@@ -346,3 +346,7 @@ svg.i { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-widt
 .imp-text strong { font: 500 15px 'Inter'; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sheet .imp-row { flex-direction: row; margin: 0; }
 #items .item { transform: scale(var(--k, 1)); }
+.imp .bar.indeterminate i { width: 35%; animation: slide 1.3s ease-in-out infinite; }
+@keyframes slide { from { translate: -100% 0; } to { translate: 300% 0; } }
+.imp .lead b { color: var(--text); font-weight: 500; }
+@media (max-width: 440px) { .home-board { --cw: 28px; --ch: 40px; --fs: 23px; margin-top: 40px; } }

@@ -47,14 +47,48 @@ export function openImport(deps) {
 }
 
 function pick(folder) {
-  app.local.set('import-geocode', document.getElementById('impGeo').checked ? 'on' : 'off');
+  const geo = document.getElementById('impGeo');
+  if (geo) app.local.set('import-geocode', geo.checked ? 'on' : 'off');
+  // iPhone Safari only reports the chosen files if the input is attached to the page
+  document.getElementById('impPick')?.remove();
   const input = document.createElement('input');
+  input.id = 'impPick';
   input.type = 'file';
   input.multiple = true;
+  input.hidden = true;
   if (folder) input.webkitdirectory = true;
   else input.accept = 'image/*';
-  input.onchange = () => scan([...input.files].filter(f => f.type.startsWith('image/') || /\.(heic|heif|jpe?g)$/i.test(f.name)));
+  document.body.appendChild(input);
+  input.addEventListener('change', () => {
+    const files = [...input.files];
+    input.remove();
+    scan(files.filter(isPhoto), files.length);
+  });
+  input.addEventListener('cancel', () => input.remove());
   input.click();
+  waiting(folder);
+}
+
+// iOS can leave the type blank for HEIC, so go by name too; just skip videos
+const isPhoto = f => f.type.startsWith('image/') ||
+  (!f.type.startsWith('video/') && /\.(heic|heif|jpe?g|png|webp|avif|dng)$/i.test(f.name));
+
+// Shown while the picker is open and while iOS prepares a big selection, which can take a while.
+function waiting(folder) {
+  sheet(`
+    <span class="mono tag">05 · FIND MY HOLIDAYS</span>
+    <h2>Waiting for your photos…</h2>
+    <div class="bar indeterminate"><i></i></div>
+    <p class="small muted lead">After you tap <b>Add</b>, your phone gets the photos ready first. With hundreds of photos this can take a minute before anything moves here.</p>
+    <div class="actions"><button type="button" class="pill ghost" data-imp="cancel">Cancel</button><button type="button" class="pill solid" data-imp="${folder ? 'folder' : 'files'}">Choose again</button></div>`);
+}
+
+function failed(message) {
+  sheet(`
+    <span class="mono tag">05 · FIND MY HOLIDAYS</span>
+    <h2>Something went wrong</h2>
+    <p class="small muted lead">${app.esc(message)}</p>
+    <div class="actions"><button type="button" class="pill ghost" data-imp="cancel">Close</button><button type="button" class="pill solid" data-imp="files">Try again</button></div>`);
 }
 
 function progress(title, done, total, note = '') {
@@ -65,8 +99,20 @@ function progress(title, done, total, note = '') {
     <p class="mono small muted">${total ? `${done} of ${total}` : ''}${note ? ` · ${note}` : ''}</p>`);
 }
 
-async function scan(files) {
-  if (!files.length) return;
+async function scan(files, picked) {
+  if (!files.length) {
+    return failed(picked
+      ? `None of the ${picked} files you chose look like photos. Videos are skipped.`
+      : 'No photos came through. Try choosing them again.');
+  }
+  try {
+    await findTrips(files);
+  } catch (e) {
+    failed(`Couldn't read your photos (${e?.message || e}). Try a smaller selection, or try again.`);
+  }
+}
+
+async function findTrips(files) {
   const records = [];
   for (let i = 0; i < files.length; i++) {
     if (i % 25 === 0) progress('Reading your photos…', i, files.length);

@@ -21,6 +21,18 @@ export function openImport(deps) {
   dlg.className = 'sheet wide';
   document.body.appendChild(dlg);
   dlg.addEventListener('close', () => dlg.remove());
+  dlg.onclick = e => {
+    const a = e.target.closest('[data-imp]')?.dataset.imp;
+    if (a === 'cancel') dlg.close();
+    if (a === 'restart') intro();
+  };
+  intro();
+  dlg.showModal();
+}
+
+// The pick buttons are real file inputs wrapped in labels: tapping one opens the picker directly,
+// which is the pattern iPhone Safari handles reliably.
+function intro() {
   const geocode = app.local.get('import-geocode') !== 'off';
   sheet(`
     <span class="mono tag">05 · FIND MY HOLIDAYS</span>
@@ -31,64 +43,36 @@ export function openImport(deps) {
       <li><b>iPhone:</b> select your photos, then tap <i>Options</i> and turn on <i>Location</i> so places can be found.</li>
     </ul>
     <label class="check"><input type="checkbox" id="impGeo" ${geocode ? 'checked' : ''}><span>Name places with OpenStreetMap <span class="muted">(sends each trip's rough location, never photos)</span></span></label>
+    <p class="imp-wait small" id="impWait" hidden><span class="bar indeterminate"><i></i></span>Waiting for your photos. After you tap <b>Add</b>, your phone gets them ready first, which can take a minute for a big selection.</p>
     <div class="actions split">
       <button type="button" class="pill ghost" data-imp="cancel">Cancel</button>
       <span>
-        ${coarse ? '' : '<button type="button" class="pill ghost" data-imp="folder">Choose a folder</button>'}
-        <button type="button" class="pill solid" data-imp="files">Choose photos</button>
+        ${coarse ? '' : '<label class="pill ghost file-btn">Choose a folder<input type="file" id="impFolder" multiple webkitdirectory></label>'}
+        <label class="pill solid file-btn">Choose photos<input type="file" id="impFiles" accept="image/*" multiple></label>
       </span>
     </div>`);
-  dlg.onclick = e => {
-    const a = e.target.closest('[data-imp]')?.dataset.imp;
-    if (a === 'cancel') dlg.close();
-    if (a === 'files' || a === 'folder') pick(a === 'folder');
-  };
-  dlg.showModal();
-}
-
-function pick(folder) {
-  const geo = document.getElementById('impGeo');
-  if (geo) app.local.set('import-geocode', geo.checked ? 'on' : 'off');
-  // iPhone Safari only reports the chosen files if the input is attached to the page
-  document.getElementById('impPick')?.remove();
-  const input = document.createElement('input');
-  input.id = 'impPick';
-  input.type = 'file';
-  input.multiple = true;
-  input.hidden = true;
-  if (folder) input.webkitdirectory = true;
-  else input.accept = 'image/*';
-  document.body.appendChild(input);
-  input.addEventListener('change', () => {
-    const files = [...input.files];
-    input.remove();
-    scan(files.filter(isPhoto), files.length);
-  });
-  input.addEventListener('cancel', () => input.remove());
-  input.click();
-  waiting(folder);
+  dlg.querySelector('#impGeo').addEventListener('change', e => app.local.set('import-geocode', e.target.checked ? 'on' : 'off'));
+  for (const input of dlg.querySelectorAll('input[type="file"]')) {
+    input.addEventListener('click', () => { dlg.querySelector('#impWait').hidden = false; });
+    input.addEventListener('cancel', () => { dlg.querySelector('#impWait').hidden = true; });
+    input.addEventListener('change', () => {
+      const files = [...input.files];
+      if (!files.length) { dlg.querySelector('#impWait').hidden = true; return; }
+      scan(files.filter(isPhoto), files.length);
+    });
+  }
 }
 
 // iOS can leave the type blank for HEIC, so go by name too; just skip videos
 const isPhoto = f => f.type.startsWith('image/') ||
   (!f.type.startsWith('video/') && /\.(heic|heif|jpe?g|png|webp|avif|dng)$/i.test(f.name));
 
-// Shown while the picker is open and while iOS prepares a big selection, which can take a while.
-function waiting(folder) {
-  sheet(`
-    <span class="mono tag">05 · FIND MY HOLIDAYS</span>
-    <h2>Waiting for your photos…</h2>
-    <div class="bar indeterminate"><i></i></div>
-    <p class="small muted lead">After you tap <b>Add</b>, your phone gets the photos ready first. With hundreds of photos this can take a minute before anything moves here.</p>
-    <div class="actions"><button type="button" class="pill ghost" data-imp="cancel">Cancel</button><button type="button" class="pill solid" data-imp="${folder ? 'folder' : 'files'}">Choose again</button></div>`);
-}
-
 function failed(message) {
   sheet(`
     <span class="mono tag">05 · FIND MY HOLIDAYS</span>
     <h2>Something went wrong</h2>
     <p class="small muted lead">${app.esc(message)}</p>
-    <div class="actions"><button type="button" class="pill ghost" data-imp="cancel">Close</button><button type="button" class="pill solid" data-imp="files">Try again</button></div>`);
+    <div class="actions"><button type="button" class="pill ghost" data-imp="cancel">Close</button><button type="button" class="pill solid" data-imp="restart">Try again</button></div>`);
 }
 
 function progress(title, done, total, note = '') {

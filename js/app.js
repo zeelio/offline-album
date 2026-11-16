@@ -7,6 +7,7 @@ import { exportPostcard } from './postcard.js';
 import { openImport } from './import-flow.js';
 import { boardFrames, countdownLabel, daysUntil, estimateBoarding, lookupFlight } from './journey.js';
 
+const BUILD = 6;
 const LENGTHS = [8, 10];
 const ITEM_SCALE_PORTRAIT = .72;
 const HALOS = ['#f3e2a9', '#e2d3f3', '#cfe0f4', '#f3d0d4', '#d6e4c4'];
@@ -140,7 +141,7 @@ async function renderHome() {
         <button class="glass pill" data-act="import">${ICON.photo}<span>Find my holidays</span></button>
       </div>
       <section class="clusters">${(await Promise.all(trips.map(clusterHTML))).join('')}</section>
-      <footer class="mono foot"><span>EST. ${new Date().getFullYear()}</span><span>DRAG · DROP · FLIP</span></footer>
+      <footer class="mono foot"><span>EST. ${new Date().getFullYear()} · BUILD ${BUILD}</span><span>DRAG · DROP · FLIP</span></footer>
     </main>`;
   const board = createBoard(document.getElementById('homeBoard'), LENGTHS);
   board.set(['', '']);

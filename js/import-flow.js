@@ -135,11 +135,15 @@ function review(trips, records) {
   thumbUrls.forEach(URL.revokeObjectURL);
   thumbUrls = [];
   const located = records.filter(r => r.lat != null).length;
+  const dated = records.filter(r => r.dated).length;
+  // what the phone actually handed over: iPhones drop locations unless Location is on under Options
+  const facts = `${records.length} photo${records.length === 1 ? '' : 's'} · ${dated} with a date · ${located} with a location`;
   if (!trips.length) {
     sheet(`
       <span class="mono tag">05 · FIND MY HOLIDAYS</span>
       <h2>No holidays found</h2>
-      <p class="small muted lead">Looked through ${records.length} photos${located ? `, ${located} with a location` : ' (none had a location)'}. A trip needs at least 5 photos across 2 days away from home. Try choosing more of your library${located ? '' : ', and on iPhone turn on Location under Options'}.</p>
+      <p class="mono small muted">${facts}</p>
+      <p class="small muted lead">In a big selection, a trip needs at least 3 photos across 2 days. Try choosing the photos from just one trip.</p>
       <div class="actions"><button type="button" class="pill solid" data-imp="cancel">Close</button></div>`);
     return;
   }
@@ -149,7 +153,7 @@ function review(trips, records) {
       thumbUrls.push(u);
       return `<img src="${u}" alt="" onerror="this.style.visibility='hidden'">`;
     }).join('');
-    const where = [t.place.city, t.place.country].filter(Boolean).join(', ') || (t.byLocation ? 'Somewhere away from home' : 'A busy stretch of photos');
+    const where = [t.place.city, t.place.country].filter(Boolean).join(', ') || (t.mode === 'away' ? 'Somewhere away from home' : 'Your trip');
     return `
       <label class="imp-row">
         <input type="checkbox" data-trip="${i}" ${t.already ? '' : 'checked'}>
@@ -164,7 +168,10 @@ function review(trips, records) {
   sheet(`
     <span class="mono tag">05 · ${trips.length} TRIP${trips.length === 1 ? '' : 'S'} FOUND</span>
     <h2>Which ones should we make?</h2>
-    <p class="small muted lead">${located ? `${located} of ${records.length} photos had a location.` : `None of these ${records.length} photos had a location, so these are guesses based on dates.`} Each trip gets up to 12 photos, spread across the days.</p>
+    <p class="mono small muted">${facts}</p>
+    <p class="small muted lead">${trips[0].mode === 'away'
+      ? 'These are the times you were away from home.'
+      : 'Grouped by date, splitting wherever there\'s a gap of a few days.'}${located ? '' : ' None of the photos had a location, so places can\'t be named. On iPhone, turn on <b>Location</b> under <b>Options</b> when choosing.'}${dated < records.length / 2 ? ' Most photos had no date, so they may all land in one trip.' : ''} Each trip gets up to 12 photos.</p>
     <div class="imp-list">${rows}</div>
     <div class="actions"><button type="button" class="pill ghost" data-imp="cancel">Cancel</button><button type="button" class="pill solid" data-imp="make">Make trips</button></div>`);
   const update = () => {

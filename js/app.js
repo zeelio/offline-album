@@ -7,7 +7,7 @@ import { exportPostcard } from './postcard.js';
 import { openImport } from './import-flow.js';
 import { boardFrames, countdownLabel, daysUntil, estimateBoarding, lookupFlight } from './journey.js';
 
-const BUILD = 6;
+const BUILD = 7;
 const LENGTHS = [8, 10];
 const ITEM_SCALE_PORTRAIT = .72;
 const HALOS = ['#f3e2a9', '#e2d3f3', '#cfe0f4', '#f3d0d4', '#d6e4c4'];

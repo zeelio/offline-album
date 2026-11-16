@@ -1,0 +1,14 @@
+{
+  "name": "Offline Album",
+  "short_name": "Offline",
+  "description": "Scrapbooks for the trips you were offline for.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f4f2ee",
+  "theme_color": "#f4f2ee",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
